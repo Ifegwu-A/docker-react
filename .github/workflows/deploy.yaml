@@ -8,20 +8,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-
-    - name: Checkout source code
-      uses: actions/checkout@v2
-
-    - name: Generate deployment package
-      run: zip -r deploy.zip . -x '*.git*'
-
-    - name: Deploy to EB
-      uses: einaregilsson/beanstalk-deploy@v21
-      with:
-        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        application_name: MyApplicationName
-        environment_name: MyApplication-Environment
-        version_label: 12345
-        region: us-west-2
-        deployment_package: deploy.zip
+      - uses: actions/checkout@v2
+      - run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      - run: docker build -t finalboss360/react-test -f ./client/Dockerfile.dev ./client
+      - run: docker run -e CI=true finalboss360/react-test npm test
+ 
+      - run: docker build -t finalboss360/multi-client-10-14 ./client
+      - run: docker build -t finalboss360/multi-nginx-10-14 ./nginx
+      - run: docker build -t finalboss360/multi-server-10-14 ./server
+      - run: docker build -t finalboss360s/multi-worker-10-14 ./worker
+ 
+      - run: docker push finalboss360/multi-client-10-14
+      - run: docker push finalboss360/multi-nginx-10-14
+      - run: docker push finalboss360/multi-server-10-14
+      - run: docker push finalboss360/multi-worker-10-14
+ 
+      - name: Generate deployment package
+        run: zip -r deploy.zip . -x '*.git*'
+ 
+      - name: Deploy to EB
+        uses: einaregilsson/beanstalk-deploy@v18
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+          application_name: multi-gh
+          environment_name: Multigh-env
+          existing_bucket_name: elasticbeanstalk-us-east-1-923445559289
+          region: us-east-1
+          version_label: ${{ github.sha }}
+          deployment_package: deploy.zip
